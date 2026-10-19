@@ -1,10 +1,27 @@
 import { useEffect, useState } from "react";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import { Menu, X } from "lucide-react";
 import { navLinks, PLAY_URL } from "../content";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [active, setActive] = useState(navLinks[0].href);
+
+  // Each link stays active until the next linked section starts, so unlisted sections in between keep the previous one lit.
+  useGSAP(() => {
+    navLinks.forEach((l, i) => {
+      const next = navLinks[i + 1];
+      ScrollTrigger.create({
+        trigger: l.href,
+        start: "top center",
+        endTrigger: next ? next.href : undefined,
+        end: next ? "top center" : "max",
+        onToggle: (self) => self.isActive && setActive(l.href),
+      });
+    });
+  });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -46,7 +63,12 @@ export default function Navbar() {
         <ul id="nav-menu" className="nav__menu">
           {navLinks.map((l) => (
             <li key={l.href}>
-              <a href={l.href} onClick={close}>
+              <a
+                href={l.href}
+                className={active === l.href ? "is-active" : undefined}
+                aria-current={active === l.href ? "location" : undefined}
+                onClick={close}
+              >
                 {l.label}
               </a>
             </li>

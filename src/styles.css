@@ -446,6 +446,10 @@ a {
   background: var(--pink-soft);
   transform: translateY(-2px);
 }
+.nav__menu a.is-active {
+  background: var(--pink-soft);
+  box-shadow: inset 0 0 0 2px var(--brown);
+}
 .nav__toggle {
   display: none;
   width: 44px;

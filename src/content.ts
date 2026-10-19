@@ -5,21 +5,21 @@ export const PLAY_URL: string | null = "https://devunnull.itch.io/call-out-my-ce
 
 export const images = {
   gameplay: {
-    src: "images/8_UI3J.png",
-    width: 2828,
-    height: 1576,
+    src: "images/8_UI3J.webp",
+    width: 1920,
+    height: 1070,
     alt: "Màn chơi thủ thành: chiến trường sinh học màu hồng chia ô theo làn, thanh chọn tế bào ở dưới, bộ đếm máu 10/10 và chỉ báo Wave 0/17",
   },
   lifestyle: {
-    src: "images/NZAtfi.png",
-    width: 2836,
-    height: 1582,
+    src: "images/NZAtfi.webp",
+    width: 1920,
+    height: 1071,
     alt: "Cảnh lựa chọn lối sống: cô bé chibi trong phòng ngủ ấm cúng với ba lựa chọn buổi sáng và khung hội thoại màu kem",
   },
   map: {
-    src: "images/8WZZH7.png",
-    width: 2174,
-    height: 1148,
+    src: "images/8WZZH7.webp",
+    width: 1920,
+    height: 1014,
     alt: "Bản đồ hành trình dạng sổ tay minh họa với các chặng từ Ngày 1 đến Ngày 9 nối bằng đường nét đứt, cây cối, sông và núi",
   },
 } as const;
