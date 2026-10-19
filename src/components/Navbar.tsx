@@ -43,7 +43,6 @@ export default function Navbar() {
     <header className={`nav ${scrolled ? "is-scrolled" : ""} ${open ? "is-open" : ""}`}>
       <nav className="nav__bar" aria-label="Điều hướng chính">
         <a href="#trang-chu" className="nav__logo" onClick={close}>
-          <img src="favicon.svg" alt="" width="34" height="34" />
           <span>
             Call Out <b>My Cells</b>
           </span>
