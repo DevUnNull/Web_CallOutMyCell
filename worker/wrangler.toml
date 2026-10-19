@@ -10,8 +10,7 @@ PRICE = "59000"
 [[d1_databases]]
 binding = "DB"
 database_name = "callout-orders"
-# Filled in by `wrangler d1 create callout-orders` (see README). Any value works for local dev.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "bc9ad9fc-d2ef-4b8f-ab7d-5b6b2b2ba00a"
 
 [[r2_buckets]]
 binding = "GAME"
