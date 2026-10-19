@@ -245,10 +245,7 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
   )
     .bind(from, to)
     .first<number>("n");
-  const { results: months } = await env.DB.prepare(
-    `SELECT strftime('%Y-%m', paid_at / 1000, 'unixepoch', '+7 hours') AS month, COUNT(*) AS buyers, SUM(amount) AS revenue
-     FROM orders WHERE status = 'paid' GROUP BY month ORDER BY month DESC LIMIT 12`,
-  ).all<{ month: string; buyers: number; revenue: number }>();
+  const weeks = await weeklySales(env, 12);
 
   const vnd = (n: number) => n.toLocaleString("vi-VN") + "đ";
   const html = `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -262,7 +259,12 @@ button,a.btn{background:#F6A5B5;font-weight:700;cursor:pointer}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}
 .card{background:#fff;border:2px solid #57362F;border-radius:14px;padding:14px}.card b{display:block;font-size:28px}
 table{width:100%;border-collapse:collapse;background:#fff;margin-bottom:28px}th,td{padding:8px;border-bottom:1px solid #eadbc8;text-align:left;font-size:14px}
-th{background:#FDE9ED}.refunded{color:#a33;text-decoration:line-through}.wrap{overflow-x:auto}
+th{background:#FDE9ED}
+.chart{background:#fff;border:2px solid #57362F;border-radius:14px;padding:12px 8px 4px;margin-bottom:12px;overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:620px;height:auto}.chart text{font:12px system-ui,sans-serif;fill:#8A6157}
+.chart .grid{stroke:#F1E6D8}.chart .base{stroke:#C9B8A6}.chart .bar{fill:#D4637A}.chart .val{fill:#57362F;font-weight:700;opacity:0}
+.chart .col:hover .bar{fill:#B44B62}.chart .col:hover .val,.chart .val.keep{opacity:1}.chart .hit{fill:transparent}
+details{margin-bottom:28px}summary{cursor:pointer;font-weight:700;margin-bottom:8px}.refunded{color:#a33;text-decoration:line-through}.wrap{overflow-x:auto}
 </style><main>
 <h1>Báo cáo bán hàng</h1>
 <form><label>Tháng <input type="month" name="month" value="${month}"></label><button>Xem</button>
@@ -277,13 +279,72 @@ th{background:#FDE9ED}.refunded{color:#a33;text-decoration:line-through}.wrap{ov
 <div class="wrap"><table><tr><th>Thời gian</th><th>Mã đơn</th><th>Email</th><th>Số tiền</th><th>Trạng thái</th></tr>
 ${rows.map((o) => `<tr class="${o.status}"><td>${vnTime(o.paid_at!)}</td><td>${o.order_code}</td><td>${esc(o.email)}</td><td>${vnd(o.amount)}</td><td>${o.status === "paid" ? "Đã thanh toán" : "Đã hoàn tiền"}</td></tr>`).join("") || `<tr><td colspan="5">Chưa có đơn nào.</td></tr>`}
 </table></div>
-<h2>12 tháng gần nhất</h2>
-<div class="wrap"><table><tr><th>Tháng</th><th>Người mua</th><th>Doanh thu</th></tr>
-${months.map((r) => `<tr><td><a href="/admin?month=${r.month}">${r.month}</a></td><td>${r.buyers}</td><td>${vnd(r.revenue)}</td></tr>`).join("") || `<tr><td colspan="3">Chưa có dữ liệu.</td></tr>`}
-</table></div>
+<h2>Người mua theo tuần (12 tuần gần nhất)</h2>
+${weekChart(weeks)}
+<details><summary>Xem dạng bảng</summary><div class="wrap"><table><tr><th>Tuần</th><th>Người mua</th><th>Doanh thu</th></tr>
+${weeks.map((w) => `<tr><td>${w.label}</td><td>${w.buyers}</td><td>${vnd(w.revenue)}</td></tr>`).join("")}
+</table></div></details>
 <p>Hoàn tiền: xem hướng dẫn trong worker/README.md. Số liệu "người mua" không tính đơn đã hoàn tiền.</p>
 </main></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+type Week = { label: string; buyers: number; revenue: number };
+
+// Monday-based weeks in Vietnam time, oldest first.
+async function weeklySales(env: Env, count: number): Promise<Week[]> {
+  const DAY = 86400_000;
+  const nowVn = Date.now() + VN_OFFSET;
+  const todayVn = nowVn - (nowVn % DAY);
+  const mondayVn = todayVn - ((new Date(todayVn).getUTCDay() + 6) % 7) * DAY;
+  const startVn = mondayVn - (count - 1) * 7 * DAY;
+  const { results } = await env.DB.prepare("SELECT paid_at, amount FROM orders WHERE status = 'paid' AND paid_at >= ?")
+    .bind(startVn - VN_OFFSET)
+    .all<{ paid_at: number; amount: number }>();
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(5, 10).split("-").reverse().join("/");
+  const weeks: Week[] = Array.from({ length: count }, (_, i) => {
+    const s = startVn + i * 7 * DAY;
+    return { label: `${fmt(s)}–${fmt(s + 6 * DAY)}`, buyers: 0, revenue: 0 };
+  });
+  for (const r of results) {
+    const w = weeks[Math.floor((r.paid_at + VN_OFFSET - startVn) / (7 * DAY))];
+    if (w) {
+      w.buyers++;
+      w.revenue += r.amount;
+    }
+  }
+  return weeks;
+}
+
+// Single-series bar chart as inline SVG: rounded bar tops, recessive grid, hover shows the value + native tooltip.
+function weekChart(weeks: Week[]): string {
+  const W = 900, H = 260, L = 36, R = 8, T = 22, B = 34;
+  const max = Math.max(...weeks.map((w) => w.buyers));
+  const step = Math.max(1, Math.ceil(max / 4));
+  const top = step * 4;
+  const y = (v: number) => T + (H - T - B) * (1 - v / top);
+  const band = (W - L - R) / weeks.length;
+  const bw = Math.min(44, band - 6);
+  const vnd = (n: number) => n.toLocaleString("vi-VN") + "đ";
+  const grid = [0, 1, 2, 3, 4]
+    .map((i) => `<line class="${i ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${y(i * step)}" y2="${y(i * step)}"/><text x="${L - 6}" y="${y(i * step) + 4}" text-anchor="end">${i * step}</text>`)
+    .join("");
+  const cols = weeks
+    .map((w, i) => {
+      const cx = L + band * i + band / 2;
+      const by = y(w.buyers);
+      const h = H - B - by;
+      const r = Math.min(4, h);
+      // Bar anchored to the baseline, only the top corners rounded.
+      const bar = h > 0
+        ? `<path class="bar" d="M${cx - bw / 2},${H - B}V${by + r}Q${cx - bw / 2},${by} ${cx - bw / 2 + r},${by}H${cx + bw / 2 - r}Q${cx + bw / 2},${by} ${cx + bw / 2},${by + r}V${H - B}Z"/>`
+        : "";
+      const keep = w.buyers > 0 && (w.buyers === max || i === weeks.length - 1) ? " keep" : "";
+      const tick = i % 2 === weeks.length % 2 || i === weeks.length - 1 ? `<text x="${cx}" y="${H - B + 18}" text-anchor="middle">${w.label.split("–")[0]}</text>` : "";
+      return `<g class="col"><title>Tuần ${w.label}: ${w.buyers} người mua · ${vnd(w.revenue)}</title>${bar}<text class="val${keep}" x="${cx}" y="${by - 6}" text-anchor="middle">${w.buyers}</text>${tick}<rect class="hit" x="${cx - band / 2}" y="${T}" width="${band}" height="${H - T - B}"/></g>`;
+    })
+    .join("");
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Số người mua mỗi tuần trong 12 tuần gần nhất">${grid}${cols}</svg></div>`;
 }
 
 async function isAdmin(req: Request, env: Env): Promise<boolean> {

@@ -34,6 +34,7 @@ Lưu ý Unity: nếu build nén Brotli/Gzip, Worker tự gửi đúng header —
 Mở https://callout-shop.callout-shop-worker.workers.dev/admin — trình duyệt hỏi đăng nhập:
 tên đăng nhập gõ gì cũng được, mật khẩu là `ADMIN_PASSWORD` trong `worker/.dev.vars`.
 Chọn tháng để xem số người mua, doanh thu, số đơn hoàn tiền, danh sách đơn; nút "Tải Excel (CSV)" xuất file.
+Cuối trang có biểu đồ số người mua theo tuần (12 tuần gần nhất), rê chuột lên cột để xem doanh thu tuần đó.
 
 Đổi mật khẩu: sửa `ADMIN_PASSWORD` trong `.dev.vars` rồi `npx wrangler secret put ADMIN_PASSWORD` (dán mật khẩu mới).
 
