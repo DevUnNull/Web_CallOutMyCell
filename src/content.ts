@@ -1,7 +1,7 @@
 // All page copy and asset references live here so content can change without touching layout.
 
 // Set to the real store / itch.io link once the game is published. null = "Sắp ra mắt".
-export const PLAY_URL: string | null = null;
+export const PLAY_URL: string | null = "https://devunnull.itch.io/call-out-my-cell";
 
 export const images = {
   gameplay: {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { navLinks } from "../content";
+import { navLinks, PLAY_URL } from "../content";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -52,9 +52,15 @@ export default function Navbar() {
             </li>
           ))}
           <li>
-            <a href="#choi-ngay" className="btn btn--pink btn--sm" onClick={close}>
-              Chơi ngay
-            </a>
+            {PLAY_URL ? (
+              <a href={PLAY_URL} className="btn btn--pink btn--sm" target="_blank" rel="noopener noreferrer" onClick={close}>
+                Chơi ngay
+              </a>
+            ) : (
+              <a href="#choi-ngay" className="btn btn--pink btn--sm" onClick={close}>
+                Chơi ngay
+              </a>
+            )}
           </li>
         </ul>
       </nav>

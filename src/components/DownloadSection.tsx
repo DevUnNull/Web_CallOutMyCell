@@ -14,8 +14,9 @@ export default function DownloadSection() {
 
           <h2>Bạn đã sẵn sàng bảo vệ cơ thể chưa?</h2>
           <p>
-            Đội quân tế bào đang chờ người chỉ huy! Call Out My Cells đang được phát triển cho di động (Android &amp;
-            iOS). Hãy theo dõi để là một trong những người đầu tiên bước vào trận chiến.
+            {PLAY_URL
+              ? "Đội quân tế bào đang chờ người chỉ huy! Bản thử nghiệm của Call Out My Cells đã có mặt trên itch.io — vào chơi ngay và cho tụi mình biết cảm nhận của bạn nhé."
+              : "Đội quân tế bào đang chờ người chỉ huy! Call Out My Cells đang được phát triển cho di động (Android & iOS). Hãy theo dõi để là một trong những người đầu tiên bước vào trận chiến."}
           </p>
 
           <div className="cta__actions">
