@@ -51,7 +51,7 @@ node scripts/upload-game.mjs game --local
 npx wrangler dev --var MOCK_PAYMENTS:1 --var SITE_URL:http://localhost:5173/ --var SITE_ORIGIN:http://localhost:5173
 ```
 
-Rồi chạy `npm run dev` ở thư mục gốc. `MOCK_PAYMENTS:1` coi mọi đơn là đã trả tiền — **chỉ dùng ở máy, không bao giờ đặt trên production**.
+Rồi đổi `VITE_SHOP_API` trong `../.env.development` thành `http://127.0.0.1:8787` và chạy `npm run dev` ở thư mục gốc (nhớ đổi lại sau khi thử). `MOCK_PAYMENTS:1` coi mọi đơn là đã trả tiền — **chỉ dùng ở máy, không bao giờ đặt trên production**.
 
 ## Đổi giá
 

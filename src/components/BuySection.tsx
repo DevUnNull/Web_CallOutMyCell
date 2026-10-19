@@ -28,6 +28,12 @@ type Phase =
   | { kind: "owned"; token: string }
   | { kind: "error"; msg: string };
 
+// fetch() throws TypeError ("Failed to fetch") when the server cannot be reached at all.
+function errorText(err: unknown): string {
+  if (err instanceof TypeError) return "Không kết nối được máy chủ thanh toán. Hãy kiểm tra mạng, tắt trình chặn quảng cáo (nếu có) rồi thử lại.";
+  return err instanceof Error ? err.message : "Có lỗi xảy ra.";
+}
+
 async function checkOrder(orderCode: string, email: string) {
   const res = await fetch(`${SHOP_API}/api/orders/${encodeURIComponent(orderCode)}?email=${encodeURIComponent(email)}`);
   const data = (await res.json()) as { status?: string; token?: string; error?: string };
@@ -92,7 +98,7 @@ export default function BuySection() {
       save({ orderCode: String(data.orderCode), email: email.trim().toLowerCase() });
       location.href = data.checkoutUrl;
     } catch (err) {
-      setPhase({ kind: "error", msg: err instanceof Error ? err.message : "Có lỗi xảy ra." });
+      setPhase({ kind: "error", msg: errorText(err) });
     }
   };
 
@@ -105,7 +111,7 @@ export default function BuySection() {
       save({ orderCode: restore.orderCode.trim(), email: restore.email.trim().toLowerCase(), token: r.token });
       setPhase({ kind: "owned", token: r.token });
     } catch (err) {
-      setPhase({ kind: "error", msg: err instanceof Error ? err.message : "Có lỗi xảy ra." });
+      setPhase({ kind: "error", msg: errorText(err) });
     }
   };
 

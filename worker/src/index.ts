@@ -28,8 +28,8 @@ export default {
     const url = new URL(req.url);
     try {
       if (url.pathname.startsWith("/api/")) {
-        if (req.method === "OPTIONS") return cors(env, new Response(null, { status: 204 }));
-        return cors(env, await api(req, url, env));
+        if (req.method === "OPTIONS") return cors(env, new Response(null, { status: 204 }), req.headers.get("Origin"));
+        return cors(env, await api(req, url, env), req.headers.get("Origin"));
       }
       if (url.pathname === "/play") return Response.redirect(url.origin + "/play/" + url.search, 302);
       if (url.pathname.startsWith("/play/")) return play(req, url, env);
@@ -37,7 +37,7 @@ export default {
     } catch (e) {
       console.error(e);
       const res = json({ error: "Lỗi máy chủ, vui lòng thử lại sau." }, 500);
-      return url.pathname.startsWith("/api/") ? cors(env, res) : res;
+      return url.pathname.startsWith("/api/") ? cors(env, res, req.headers.get("Origin")) : res;
     }
   },
 };
@@ -219,9 +219,11 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 
-function cors(env: Env, res: Response): Response {
+function cors(env: Env, res: Response, origin: string | null): Response {
   const r = new Response(res.body, res);
-  r.headers.set("Access-Control-Allow-Origin", env.SITE_ORIGIN);
+  // SITE_ORIGIN may list several origins, comma-separated (live site + local dev).
+  const allowed = env.SITE_ORIGIN.split(",").map((s) => s.trim());
+  r.headers.set("Access-Control-Allow-Origin", origin && allowed.includes(origin) ? origin : allowed[0]);
   r.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   r.headers.set("Access-Control-Allow-Headers", "Content-Type");
   r.headers.set("Vary", "Origin");
