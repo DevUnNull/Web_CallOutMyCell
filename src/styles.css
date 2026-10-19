@@ -1478,4 +1478,8 @@ a {
   .world__deco {
     display: none;
   }
+  .cta__s2 {
+    top: -26px;
+    right: 24px;
+  }
 }
