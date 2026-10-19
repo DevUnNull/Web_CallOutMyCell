@@ -57,6 +57,18 @@ export default function BuySection() {
       document.getElementById("mua")?.scrollIntoView({ behavior: "instant" });
     }
     if (s?.token) return setPhase({ kind: "owned", token: s.token });
+    // Paid earlier but closed the tab before returning: one quiet re-check on a normal visit.
+    if (!returned && s) {
+      checkOrder(s.orderCode, s.email)
+        .then((r) => {
+          if (r.status === "paid" && r.token) {
+            save({ ...s, token: r.token });
+            setPhase({ kind: "owned", token: r.token });
+          }
+        })
+        .catch(() => {});
+      return;
+    }
     if (!returned || !s || s.orderCode !== returned) return;
     if (params.get("cancel") === "true") return setPhase({ kind: "error", msg: "Bạn đã hủy thanh toán. Có thể mua lại bất cứ lúc nào." });
 

@@ -15,3 +15,7 @@ database_id = "bc9ad9fc-d2ef-4b8f-ab7d-5b6b2b2ba00a"
 [[r2_buckets]]
 binding = "GAME"
 bucket_name = "callout-game"
+
+[triggers]
+# Reconcile pending orders with PayOS (see scheduled() in src/index.ts)
+crons = ["*/10 * * * *"]

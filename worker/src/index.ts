@@ -4,6 +4,8 @@
 //   POST /api/orders            {email}        -> create PayOS payment link, return checkoutUrl
 //   GET  /api/orders/:code?email=               -> check payment with PayOS; when PAID return an access token
 //   GET  /play/?token=...                       -> validate token, set cookie, serve the full game from R2 (prefix "full/")
+//   GET  /admin?month=YYYY-MM  (+ /admin.csv)   -> monthly sales report, HTTP Basic auth (ADMIN_PASSWORD)
+//   cron every 10 min                           -> reconcile pending orders with PayOS (buyer may close the tab after paying)
 //
 // Payment is confirmed by asking PayOS directly (server to server), never by trusting the browser redirect.
 // Refund = revoke access manually, see worker/README.md.
@@ -17,6 +19,7 @@ export interface Env {
   PAYOS_CLIENT_ID: string;
   PAYOS_API_KEY: string;
   PAYOS_CHECKSUM_KEY: string;
+  ADMIN_PASSWORD: string;
   MOCK_PAYMENTS?: string; // "1" only in local .dev.vars: every order counts as paid, no real money
 }
 
@@ -33,6 +36,7 @@ export default {
       }
       if (url.pathname === "/play") return Response.redirect(url.origin + "/play/" + url.search, 302);
       if (url.pathname.startsWith("/play/")) return play(req, url, env);
+      if (url.pathname === "/admin" || url.pathname === "/admin.csv") return admin(req, url, env);
       return new Response("Not found", { status: 404 });
     } catch (e) {
       console.error(e);
@@ -40,7 +44,23 @@ export default {
       return url.pathname.startsWith("/api/") ? cors(env, res, req.headers.get("Origin")) : res;
     }
   },
+
+  // Reconcile recent pending orders so reports are right even if the buyer never came back to the site.
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    const { results } = await env.DB.prepare(
+      "SELECT * FROM orders WHERE status = 'pending' AND created_at > ? ORDER BY created_at DESC LIMIT 40",
+    )
+      .bind(Date.now() - 2 * 3600_000)
+      .all<Order>();
+    for (const o of results) {
+      if (await isPaid(o, env)) await markPaid(o, env);
+      else if (o.created_at < Date.now() - LINK_TTL_MS - 5 * 60_000)
+        await env.DB.prepare("UPDATE orders SET status = 'expired' WHERE order_code = ? AND status = 'pending'").bind(o.order_code).run();
+    }
+  },
 };
+
+const LINK_TTL_MS = 30 * 60_000; // PayOS payment link lifetime
 
 // ---------- API ----------
 
@@ -76,7 +96,7 @@ async function api(req: Request, url: URL, env: Env): Promise<Response> {
     const res = await fetch(PAYOS, {
       method: "POST",
       headers: payosHeaders(env),
-      body: JSON.stringify({ ...link, signature }),
+      body: JSON.stringify({ ...link, signature, expiredAt: Math.floor((Date.now() + LINK_TTL_MS) / 1000) }),
     });
     const data = (await res.json()) as { code: string; desc: string; data?: { checkoutUrl: string } };
     if (data.code !== "00" || !data.data) {
@@ -93,14 +113,9 @@ async function api(req: Request, url: URL, env: Env): Promise<Response> {
     // Same answer for "no such order" and "wrong email" so order codes can't be probed.
     if (!order || !email || order.email !== email) return json({ error: "Không tìm thấy đơn hàng với mã và email này." }, 404);
 
-    if (order.status === "pending" && (await isPaid(order, env))) {
-      const token = randomHex(32);
-      await env.DB.prepare("UPDATE orders SET status = 'paid', token = ?, paid_at = ? WHERE order_code = ? AND status = 'pending'")
-        .bind(token, Date.now(), order.order_code)
-        .run();
-      order.status = "paid";
-      order.token = token;
-    }
+    if (order.status === "pending" && (await isPaid(order, env))) await markPaid(order, env);
+    // The cron may have marked it paid with its own token: re-read so both paths agree.
+    if (order.status !== "paid") Object.assign(order, await env.DB.prepare("SELECT * FROM orders WHERE order_code = ?").bind(order.order_code).first<Order>());
     if (order.status === "paid") return json({ status: "paid", token: order.token });
     return json({ status: order.status });
   }
@@ -108,7 +123,25 @@ async function api(req: Request, url: URL, env: Env): Promise<Response> {
   return json({ error: "Not found" }, 404);
 }
 
-type Order = { order_code: number; email: string; amount: number; status: string; token: string | null };
+type Order = {
+  order_code: number;
+  email: string;
+  amount: number;
+  status: string; // pending | paid | expired | refunded
+  token: string | null;
+  created_at: number;
+  paid_at: number | null;
+};
+
+async function markPaid(order: Order, env: Env): Promise<void> {
+  const token = randomHex(32);
+  const now = Date.now();
+  // "AND status = pending" makes this idempotent if the cron and the buyer confirm at the same moment.
+  const r = await env.DB.prepare("UPDATE orders SET status = 'paid', token = ?, paid_at = ? WHERE order_code = ? AND status = 'pending'")
+    .bind(token, now, order.order_code)
+    .run();
+  if (r.meta.changes) Object.assign(order, { status: "paid", token, paid_at: now });
+}
 
 async function isPaid(order: Order, env: Env): Promise<boolean> {
   if (env.MOCK_PAYMENTS === "1") return true;
@@ -168,6 +201,112 @@ function accessDenied(env: Env): Response {
 <p><a href="${env.SITE_URL}#mua">Về trang mua game</a></p></body>`,
     { status: 403, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
+}
+
+// ---------- Admin report ----------
+
+const VN_OFFSET = 7 * 3600_000; // report months in Vietnam time (UTC+7)
+
+async function admin(req: Request, url: URL, env: Env): Promise<Response> {
+  if (!(await isAdmin(req, env))) {
+    return new Response("Cần đăng nhập", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="COMC admin", charset="UTF-8"' } });
+  }
+
+  const now = new Date(Date.now() + VN_OFFSET);
+  const month = /^\d{4}-\d{2}$/.test(url.searchParams.get("month") ?? "")
+    ? url.searchParams.get("month")!
+    : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const [y, m] = month.split("-").map(Number);
+  const from = Date.UTC(y, m - 1, 1) - VN_OFFSET;
+  const to = Date.UTC(y, m, 1) - VN_OFFSET;
+
+  // Sales are counted by payment time; refunded orders keep their paid_at.
+  const { results: rows } = await env.DB.prepare(
+    "SELECT * FROM orders WHERE paid_at >= ? AND paid_at < ? AND status IN ('paid', 'refunded') ORDER BY paid_at DESC",
+  )
+    .bind(from, to)
+    .all<Order>();
+
+  if (url.pathname === "/admin.csv") {
+    const csv = [
+      "Thoi gian thanh toan,Ma don,Email,So tien,Trang thai",
+      ...rows.map((o) => [vnTime(o.paid_at!), o.order_code, o.email, o.amount, o.status].join(",")),
+    ].join("\r\n");
+    return new Response("﻿" + csv, {
+      headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="don-hang-${month}.csv"` },
+    });
+  }
+
+  const paid = rows.filter((o) => o.status === "paid");
+  const refunded = rows.filter((o) => o.status === "refunded");
+  const revenue = paid.reduce((s, o) => s + o.amount, 0);
+  const abandoned = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM orders WHERE created_at >= ? AND created_at < ? AND status IN ('pending', 'expired')",
+  )
+    .bind(from, to)
+    .first<number>("n");
+  const { results: months } = await env.DB.prepare(
+    `SELECT strftime('%Y-%m', paid_at / 1000, 'unixepoch', '+7 hours') AS month, COUNT(*) AS buyers, SUM(amount) AS revenue
+     FROM orders WHERE status = 'paid' GROUP BY month ORDER BY month DESC LIMIT 12`,
+  ).all<{ month: string; buyers: number; revenue: number }>();
+
+  const vnd = (n: number) => n.toLocaleString("vi-VN") + "đ";
+  const html = `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Báo cáo bán hàng ${month}</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:24px 16px;background:#FFF7EA;color:#57362F}
+main{max-width:960px;margin:0 auto}h1{margin:0 0 16px}
+form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
+input,button,a.btn{font:inherit;padding:6px 12px;border:2px solid #57362F;border-radius:10px;background:#fff;color:#57362F;text-decoration:none}
+button,a.btn{background:#F6A5B5;font-weight:700;cursor:pointer}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.card{background:#fff;border:2px solid #57362F;border-radius:14px;padding:14px}.card b{display:block;font-size:28px}
+table{width:100%;border-collapse:collapse;background:#fff;margin-bottom:28px}th,td{padding:8px;border-bottom:1px solid #eadbc8;text-align:left;font-size:14px}
+th{background:#FDE9ED}.refunded{color:#a33;text-decoration:line-through}.wrap{overflow-x:auto}
+</style><main>
+<h1>Báo cáo bán hàng</h1>
+<form><label>Tháng <input type="month" name="month" value="${month}"></label><button>Xem</button>
+<a class="btn" href="/admin.csv?month=${month}">Tải Excel (CSV)</a></form>
+<div class="cards">
+<div class="card">Người mua<b>${paid.length}</b></div>
+<div class="card">Doanh thu<b>${vnd(revenue)}</b></div>
+<div class="card">Đã hoàn tiền<b>${refunded.length}</b></div>
+<div class="card">Đơn tạo nhưng không trả<b>${abandoned ?? 0}</b></div>
+</div>
+<h2>Đơn đã thanh toán tháng ${month}</h2>
+<div class="wrap"><table><tr><th>Thời gian</th><th>Mã đơn</th><th>Email</th><th>Số tiền</th><th>Trạng thái</th></tr>
+${rows.map((o) => `<tr class="${o.status}"><td>${vnTime(o.paid_at!)}</td><td>${o.order_code}</td><td>${esc(o.email)}</td><td>${vnd(o.amount)}</td><td>${o.status === "paid" ? "Đã thanh toán" : "Đã hoàn tiền"}</td></tr>`).join("") || `<tr><td colspan="5">Chưa có đơn nào.</td></tr>`}
+</table></div>
+<h2>12 tháng gần nhất</h2>
+<div class="wrap"><table><tr><th>Tháng</th><th>Người mua</th><th>Doanh thu</th></tr>
+${months.map((r) => `<tr><td><a href="/admin?month=${r.month}">${r.month}</a></td><td>${r.buyers}</td><td>${vnd(r.revenue)}</td></tr>`).join("") || `<tr><td colspan="3">Chưa có dữ liệu.</td></tr>`}
+</table></div>
+<p>Hoàn tiền: xem hướng dẫn trong worker/README.md. Số liệu "người mua" không tính đơn đã hoàn tiền.</p>
+</main></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+async function isAdmin(req: Request, env: Env): Promise<boolean> {
+  if (!env.ADMIN_PASSWORD) return false; // no password configured = admin disabled
+  const m = (req.headers.get("Authorization") ?? "").match(/^Basic (.+)$/);
+  if (!m) return false;
+  let pass = "";
+  try {
+    pass = new TextDecoder().decode(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0))).split(":").slice(1).join(":");
+  } catch {
+    return false;
+  }
+  const a = new TextEncoder().encode(pass);
+  const b = new TextEncoder().encode(env.ADMIN_PASSWORD);
+  return a.byteLength === b.byteLength && crypto.subtle.timingSafeEqual(a, b);
+}
+
+function vnTime(ms: number): string {
+  return new Date(ms + VN_OFFSET).toISOString().slice(0, 16).replace("T", " ");
+}
+
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 }
 
 // ---------- helpers ----------

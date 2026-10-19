@@ -29,6 +29,17 @@ node scripts/upload-game.mjs game --remote
 Người đã mua tự được chơi bản mới, không cần làm gì thêm.
 Lưu ý Unity: nếu build nén Brotli/Gzip, Worker tự gửi đúng header — không cần bật "Decompression Fallback".
 
+## Báo cáo bán hàng
+
+Mở https://callout-shop.callout-shop-worker.workers.dev/admin — trình duyệt hỏi đăng nhập:
+tên đăng nhập gõ gì cũng được, mật khẩu là `ADMIN_PASSWORD` trong `worker/.dev.vars`.
+Chọn tháng để xem số người mua, doanh thu, số đơn hoàn tiền, danh sách đơn; nút "Tải Excel (CSV)" xuất file.
+
+Đổi mật khẩu: sửa `ADMIN_PASSWORD` trong `.dev.vars` rồi `npx wrangler secret put ADMIN_PASSWORD` (dán mật khẩu mới).
+
+Mỗi 10 phút Worker tự đối soát đơn đang chờ với PayOS (người mua trả tiền rồi đóng tab vẫn được ghi nhận),
+đơn quá 30 phút không trả chuyển thành `expired`.
+
 ## Hoàn tiền (thu hồi quyền chơi)
 
 Sau khi đã chuyển trả tiền cho người mua (thủ công qua app ngân hàng):
