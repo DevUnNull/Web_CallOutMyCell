@@ -11,6 +11,7 @@ import WorldSection from "./components/WorldSection";
 import FeaturesSection from "./components/FeaturesSection";
 import GallerySection from "./components/GallerySection";
 import DownloadSection from "./components/DownloadSection";
+import BuySection from "./components/BuySection";
 import Footer from "./components/Footer";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -72,6 +73,7 @@ export default function App() {
         <FeaturesSection />
         <GallerySection />
         <DownloadSection />
+        <BuySection />
       </main>
       <Footer />
     </div>

@@ -32,7 +32,34 @@ export const navLinks = [
   { href: "#gameplay", label: "Gameplay" },
   { href: "#the-gioi", label: "Thế giới" },
   { href: "#thu-vien", label: "Thư viện" },
+  { href: "#mua", label: "Mua game" },
 ];
+
+// ---- Full version sales (backend: worker/) ----
+// Worker URL; empty = sales closed ("Sắp mở bán"). Set in .env.development / .env.production.
+export const SHOP_API: string = import.meta.env.VITE_SHOP_API ?? "";
+export const PRICE_LABEL = "59.000đ";
+
+// TODO: điền link fanpage Facebook khi có (dùng cho hỗ trợ + yêu cầu hoàn tiền). null = ẩn link, chỉ hiện chữ.
+export const FACEBOOK_URL: string | null = null;
+
+export const plans = {
+  demo: {
+    name: "Bản demo",
+    price: "Miễn phí",
+    perks: ["Chơi trên trình duyệt qua itch.io", "Trải nghiệm 1 ngày trong game", "Làm quen lối chơi trước khi mua"],
+  },
+  full: {
+    name: "Bản đầy đủ",
+    price: PRICE_LABEL,
+    perks: [
+      "Có sẵn 3 ngày chơi",
+      "Liên tục cập nhật thêm ngày mới",
+      "Chơi ngay trên trình duyệt, mua một lần",
+      "Hoàn tiền nếu không phù hợp trong 2 giờ chơi đầu",
+    ],
+  },
+};
 
 export const aboutCards = [
   {

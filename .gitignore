@@ -5,3 +5,11 @@ dist/
 
 # Internal report: contains student IDs and financial data, keep it out of a public repo
 GDD.docx
+
+# Worker secrets and private notes: never commit
+worker/.dev.vars
+worker/.dev.vas
+worker/cacThongTinKhac
+
+# Wrangler local state (local D1/R2 data)
+.wrangler/
