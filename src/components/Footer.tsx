@@ -1,4 +1,4 @@
-import { navLinks } from "../content";
+import { FACEBOOK_URL, navLinks } from "../content";
 import Sticker from "./Sticker";
 
 export default function Footer() {
@@ -35,8 +35,13 @@ export default function Footer() {
         <div>
           <p className="footer__heading">Đội ngũ</p>
           <p>Phát triển bởi Nhóm 4 — dự án EXE.</p>
-          {/* TODO: thêm link mạng xã hội chính thức (TikTok, Facebook, Discord…) khi có */}
-          <p className="footer__muted">Kênh cộng đồng chính thức sẽ được cập nhật sớm.</p>
+          {FACEBOOK_URL && (
+            <p>
+              <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer">
+                Fanpage Facebook
+              </a>
+            </p>
+          )}
         </div>
       </div>
       <p className="footer__copy">© {new Date().getFullYear()} Call Out My Cells. Mọi quyền được bảo lưu.</p>

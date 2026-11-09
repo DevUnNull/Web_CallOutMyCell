@@ -40,8 +40,8 @@ export const navLinks = [
 export const SHOP_API: string = import.meta.env.VITE_SHOP_API ?? "";
 export const PRICE_LABEL = "59.000đ";
 
-// TODO: điền link fanpage Facebook khi có (dùng cho hỗ trợ + yêu cầu hoàn tiền). null = ẩn link, chỉ hiện chữ.
-export const FACEBOOK_URL: string | null = null;
+// Fanpage Facebook (dùng cho hỗ trợ + yêu cầu hoàn tiền). null = ẩn link, chỉ hiện chữ.
+export const FACEBOOK_URL: string | null = "https://www.facebook.com/profile.php?id=61595510534199";
 
 export const plans = {
   demo: {
