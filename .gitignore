@@ -13,3 +13,6 @@ worker/cacThongTinKhac
 
 # Wrangler local state (local D1/R2 data)
 .wrangler/
+
+# Game builds are hosted on R2, too big for git
+*.zip

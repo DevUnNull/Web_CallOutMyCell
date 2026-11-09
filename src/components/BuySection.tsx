@@ -183,7 +183,7 @@ export default function BuySection() {
                   </p>
                 )}
                 <a href={`${SHOP_API}/play/?token=${phase.token}`} className="btn btn--pink btn--lg">
-                  <Gamepad2 size={22} aria-hidden="true" /> Chơi bản đầy đủ
+                  <Gamepad2 size={22} aria-hidden="true" /> Tải bản đầy đủ
                 </a>
               </div>
             ) : !SHOP_API ? (

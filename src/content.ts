@@ -55,7 +55,7 @@ export const plans = {
     perks: [
       "Có sẵn 3 ngày chơi",
       "Liên tục cập nhật thêm ngày mới",
-      "Chơi ngay trên trình duyệt, mua một lần",
+      "Tải về chơi trên Windows, mua một lần",
       "Hoàn tiền nếu không phù hợp trong 2 giờ chơi đầu",
     ],
   },
